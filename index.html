@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BitTorrent Protocol: An Interactive Deep Dive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 
+        Narrative & Structure Plan:
+        1. Hero: Title & Brief Intro to BitTorrent's significance.
+        2. Justification: Why BitTorrent is a key P2P system (from report sec 1). Visualization: Key stat/fact.
+        3. Core Architecture: Hybrid P2P model (report sec 2). Visualization: HTML/CSS Flow Diagram.
+        4. Key Components: .torrent, Tracker, Peers, Pieces, DHT, PEX (report sec 2). Visualization: Icon-based cards.
+        5. Communication Channels: Peer-to-Peer, Peer-to-Tracker, Peer-to-DHT (report sec 3). Visualization: Comparison Table.
+        6. Message Delivery Analysis: Latency, Ordering, Loss, Security per channel (report sec 3). Visualization: Radar Charts.
+        7. Information Dissemination: How info (peer lists, piece availability) spreads (report sec 4). Visualization: HTML/CSS Flow Diagram.
+        8. Asynchronous vs. Synchronous: Impact on BitTorrent's mechanisms (report sec 4). Visualization: Comparative list/diagram.
+        9. Conclusion: Summary of BitTorrent's design strengths and resilience.
+    -->
+    <!-- 
+        Visualization Choices Summary (Confirming NO SVG, NO MERMAID JS):
+        - Section 2 (Justification): Single Big Number (HTML Text) - Goal: Inform. Justification: Highlight key impact. Method: HTML/Tailwind. NO SVG.
+        - Section 3 (Core Architecture): Flow Chart (HTML/CSS) - Goal: Organize. Justification: Visually show hybrid structure. Method: HTML/Tailwind divs & borders. NO SVG, NO MERMAID JS.
+        - Section 4 (Key Components): Icon Cards (HTML/CSS with Unicode) - Goal: Inform/Organize. Justification: Clear component roles. Method: HTML/Tailwind, Unicode characters. NO SVG.
+        - Section 5 (Communication Channels): Comparison Table (HTML/CSS) - Goal: Organize/Compare. Justification: Structured data presentation. Method: HTML/Tailwind table. NO SVG.
+        - Section 6 (Message Delivery Analysis): Radar Charts (Chart.js) - Goal: Compare/Relationships. Justification: Multi-variable comparison per channel. Method: Chart.js Canvas. NO SVG.
+        - Section 7 (Information Dissemination): Flow Chart (HTML/CSS) - Goal: Organize. Justification: Illustrate info pathways. Method: HTML/Tailwind divs & borders. NO SVG, NO MERMAID JS.
+        - Section 8 (Async vs. Sync): Comparative List/Diagram (HTML/CSS) - Goal: Compare. Justification: Contrast operational models. Method: HTML/Tailwind. NO SVG.
+        - NO MERMAID JS USED. NO SVG GRAPHICS USED. All diagrams by HTML/CSS. Charts by Chart.js Canvas.
+    -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Tailwind's Inter is often default, but explicitly stating for clarity */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Default max-width */
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px; /* Default height */
+            max-height: 400px; /* Default max-height */
+        }
+        @media (min-width: 768px) { /* md breakpoint */
+            .chart-container {
+                height: 350px;
+                 max-height: 450px;
+            }
+        }
+        .section-title {
+            font-size: 2.25rem; /* approx text-4xl */
+            font-weight: 700;
+            color: #073B4C; /* Midnight Blue/Dark Teal */
+            margin-bottom: 1.5rem; /* mb-6 */
+            text-align: center;
+        }
+        .sub-section-title {
+            font-size: 1.5rem; /* approx text-2xl */
+            font-weight: 600;
+            color: #118AB2; /* Cerulean Blue */
+            margin-top: 2rem; /* mt-8 */
+            margin-bottom: 1rem; /* mb-4 */
+        }
+        .content-text {
+            font-size: 1rem; /* text-base */
+            line-height: 1.6; /* leading-relaxed */
+            color: #073B4C; /* Darker text */
+        }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+            padding: 1.5rem; /* p-6 */
+            margin-bottom: 1.5rem; /* mb-6 */
+        }
+        .flow-box {
+            border: 2px solid #118AB2; /* Cerulean Blue */
+            padding: 1rem;
+            border-radius: 0.375rem; /* rounded-md */
+            text-align: center;
+            background-color: #FFFFFF;
+            color: #073B4C;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .flow-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: #118AB2; /* Cerulean Blue */
+            margin: 0.5rem 0;
+        }
+         .sticky-nav {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 0.5rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .nav-link {
+            color: #118AB2;
+            transition: color 0.3s ease;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #FF6B6B; /* Coral Red for active/hover */
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <nav class="sticky-nav">
+        <div class="container mx-auto px-4">
+            <ul class="flex flex-wrap justify-center space-x-4 md:space-x-6 py-2 text-sm md:text-base">
+                <li><a href="#intro" class="nav-link">Intro</a></li>
+                <li><a href="#justification" class="nav-link">Why BitTorrent?</a></li>
+                <li><a href="#architecture" class="nav-link">Architecture</a></li>
+                <li><a href="#components" class="nav-link">Components</a></li>
+                <li><a href="#channels" class="nav-link">Channels</a></li>
+                <li><a href="#delivery" class="nav-link">Delivery Analysis</a></li>
+                <li><a href="#dissemination" class="nav-link">Dissemination</a></li>
+                <li><a href="#async-sync" class="nav-link">Async vs. Sync</a></li>
+                <li><a href="#conclusion" class="nav-link">Conclusion</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <header id="intro" class="bg-[#073B4C] text-white py-16 px-4 text-center">
+        <div class="container mx-auto">
+            <h1 class="text-4xl md:text-5xl font-bold mb-4">BitTorrent Protocol</h1>
+            <p class="text-xl md:text-2xl mb-2 text-[#FFD166]">An Interactive Deep Dive into Decentralized File Sharing</p>
+            <p class="text-lg text-gray-300 max-w-3xl mx-auto">
+                Exploring the intricate architecture, communication channels, and information dissemination strategies of one of the most significant P2P systems.
+            </p>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-8">
+
+        <section id="justification" class="py-12">
+            <h2 class="section-title">Why Model BitTorrent?</h2>
+            <div class="card">
+                <p class="content-text mb-4">
+                    BitTorrent is selected for modeling due to its status as a "classic, large-scale, decentralized peer-to-peer (P2P) file-sharing system." Its architecture inherently addresses significant challenges in distributed environments, including unreliable peers, dynamic participation, and efficient content distribution. These characteristics make BitTorrent an exceptionally rich case study for examining fundamental distributed systems concepts like distributed communication, resource sharing, and fault tolerance.
+                </p>
+                <p class="content-text mb-4">
+                    The design philosophy of BitTorrent, balancing centralized bootstrapping elements with decentralized execution, offers a practical model for achieving both scalability and resilience. Its evolution towards greater decentralization (e.g., integration of DHT and PEX) showcases adaptation to overcome limitations, enhancing system robustness.
+                </p>
+                <div class="text-center mt-8">
+                    <div class="inline-block bg-[#FFD166] text-[#073B4C] p-6 rounded-lg shadow-lg">
+                        <div class="text-5xl font-bold">Hybrid Power</div>
+                        <div class="text-xl">Balancing Centralized & Decentralized Elements</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="architecture" class="py-12 bg-gray-50">
+            <h2 class="section-title">Core Architecture: A Hybrid P2P Model</h2>
+            <div class="card">
+                <p class="content-text mb-4">
+                    BitTorrent's architecture is fundamentally peer-to-peer (P2P), but it's a sophisticated hybrid model. It combines centralized elements for initial coordination with structured and unstructured P2P mechanisms for robust, decentralized operation.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center mb-6">
+                    <div class="card bg-[#E6FFFA] border border-[#06D6A0]">
+                        <h3 class="text-xl font-semibold text-[#073B4C] mb-2 text-center">Centralized Elements (Historically)</h3>
+                        <p class="text-sm text-gray-700 text-center">Trackers act as coordination points, maintaining lists of active peers for a torrent.</p>
+                    </div>
+                    <div class="card bg-[#FFF0F0] border border-[#FF6B6B]">
+                        <h3 class="text-xl font-semibold text-[#073B4C] mb-2 text-center">Structured P2P</h3>
+                        <p class="text-sm text-gray-700 text-center">Distributed Hash Tables (DHT) enable trackerless peer discovery based on Kademlia.</p>
+                    </div>
+                    <div class="card bg-[#E0F2FE] border border-[#118AB2]">
+                        <h3 class="text-xl font-semibold text-[#073B4C] mb-2 text-center">Unstructured P2P</h3>
+                        <p class="text-sm text-gray-700 text-center">Direct peer-to-peer exchange and Peer Exchange (PEX) for opportunistic discovery.</p>
+                    </div>
+                </div>
+                <p class="content-text mb-6">
+                    This hybrid approach allows BitTorrent to be highly dynamic and resilient, accommodating constant peer churn (joining and leaving) through continuous discovery mechanisms.
+                </p>
+                
+                <h3 class="sub-section-title text-center">Simplified Architectural Flow</h3>
+                <div class="mt-4 space-y-4 md:space-y-0 md:flex md:justify-around md:items-start">
+                    <div class="flex flex-col items-center space-y-2">
+                        <div class="flow-box w-full md:w-48">User with .torrent / Magnet Link</div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="flow-box w-full md:w-48">BitTorrent Client (Peer)</div>
+                    </div>
+                    <div class="flow-arrow hidden md:block mx-4">➡️</div>
+                     <div class="flow-arrow md:hidden">⬇️</div>
+                    <div class="flex flex-col items-center space-y-2">
+                        <div class="flow-box w-full md:w-48">Contacts Discovery Mechanisms:</div>
+                        <div class="flex space-x-2 mt-2">
+                           <div class="flow-box text-xs p-2">Tracker</div>
+                           <div class="flow-box text-xs p-2">DHT</div>
+                           <div class="flow-box text-xs p-2">PEX</div>
+                        </div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="flow-box w-full md:w-48">Obtains Peer List</div>
+                    </div>
+                    <div class="flow-arrow hidden md:block mx-4">➡️</div>
+                    <div class="flow-arrow md:hidden">⬇️</div>
+                    <div class="flex flex-col items-center space-y-2">
+                        <div class="flow-box w-full md:w-48">Connects to Other Peers</div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="flow-box w-full md:w-48">Piece Exchange (Download/Upload)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="components" class="py-12">
+            <h2 class="section-title">Key Ecosystem Components</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card transform hover:scale-105 transition-transform">
+                    <h3 class="text-xl font-semibold text-[#118AB2] mb-2"><span class="text-2xl mr-2">📄</span>.torrent File (Metainfo)</h3>
+                    <p class="content-text text-sm">Contains metadata: tracker URLs, file info, piece length, and cryptographic hashes for data integrity. Uniquely identified by its `infohash`.</p>
+                </div>
+                <div class="card transform hover:scale-105 transition-transform">
+                    <h3 class="text-xl font-semibold text-[#118AB2] mb-2"><span class="text-2xl mr-2">📡</span>Tracker</h3>
+                    <p class="content-text text-sm">A server coordinating peers. Receives `announce` requests and responds with lists of other peers in the swarm. Can also provide torrent statistics (`scrape`).</p>
+                </div>
+                <div class="card transform hover:scale-105 transition-transform">
+                    <h3 class="text-xl font-semibold text-[#118AB2] mb-2"><span class="text-2xl mr-2">💻</span>Peers</h3>
+                    <p class="content-text text-sm">Clients sharing a torrent. <strong class="text-[#FF6B6B]">Leechers</strong> download and upload. <strong class="text-[#06D6A0]">Seeders</strong> have all pieces and only upload.</p>
+                </div>
+                <div class="card transform hover:scale-105 transition-transform">
+                    <h3 class="text-xl font-semibold text-[#118AB2] mb-2"><span class="text-2xl mr-2">🧩</span>Pieces</h3>
+                    <p class="content-text text-sm">The file content is divided into fixed-size blocks. These are the units of transfer and verification using hashes from the .torrent file.</p>
+                </div>
+                <div class="card transform hover:scale-105 transition-transform">
+                    <h3 class="text-xl font-semibold text-[#118AB2] mb-2"><span class="text-2xl mr-2">🌐</span>DHT Nodes</h3>
+                    <p class="content-text text-sm">Peers in a Kademlia-based network enabling trackerless peer discovery. They store and provide contact info for peers based on infohashes.</p>
+                </div>
+                <div class="card transform hover:scale-105 transition-transform">
+                    <h3 class="text-xl font-semibold text-[#118AB2] mb-2"><span class="text-2xl mr-2">🤝</span>PEX Participants</h3>
+                    <p class="content-text text-sm">Connected peers that exchange lists of other known peers in the same swarm, further decentralizing discovery and reducing tracker load.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="channels" class="py-12 bg-gray-50">
+            <h2 class="section-title">Communication Channels</h2>
+            <div class="card overflow-x-auto">
+                <p class="content-text mb-4">BitTorrent utilizes distinct communication channels, each with specific protocols and purposes, to facilitate the complex dance of decentralized file sharing.</p>
+                <table class="min-w-full divide-y divide-gray-300">
+                    <thead class="bg-[#118AB2] text-white">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Channel</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Protocols</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Data Exchanged (Examples)</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Marshalling</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200 content-text text-sm">
+                        <tr>
+                            <td class="px-4 py-4 whitespace-nowrap font-medium text-[#073B4C]">Peer-to-Tracker</td>
+                            <td class="px-4 py-4">HTTP/HTTPS (BEP 3), UDP Tracker Protocol (BEP 15)</td>
+                            <td class="px-4 py-4">Peer IP/port, infohash, stats; Tracker responds with peer list, interval.</td>
+                            <td class="px-4 py-4">URL-encoded (HTTP req), Bencoded dicts (HTTP resp), Binary (UDP).</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-4 whitespace-nowrap font-medium text-[#073B4C]">Peer-to-Peer</td>
+                            <td class="px-4 py-4">BitTorrent Wire Protocol (BEP 3) over TCP or uTP (BEP 29 on UDP)</td>
+                            <td class="px-4 py-4">Handshake, bitfield, have, request, piece, choke, PEX messages.</td>
+                            <td class="px-4 py-4">Length-prefixed binary messages; Bencoding for extensions.</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-4 whitespace-nowrap font-medium text-[#073B4C]">Peer-to-DHT</td>
+                            <td class="px-4 py-4">Kademlia-based KRPC (BEP 5) over UDP</td>
+                            <td class="px-4 py-4">Node IDs, infohashes for `get_peers`, peer contacts, routing info.</td>
+                            <td class="px-4 py-4">Bencoded dictionaries.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="delivery" class="py-12">
+            <h2 class="section-title">Message Delivery Deep Dive</h2>
+            <div class="card">
+                <p class="content-text mb-6">Understanding message delivery (latency, ordering, loss, security) is crucial for appreciating BitTorrent's resilience and performance. Below is a comparative look at its main communication channels.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div>
+                        <h3 class="sub-section-title text-center">Peer-to-Peer Channel</h3>
+                        <div class="chart-container h-80 md:h-96"><canvas id="p2pRadarChart"></canvas></div>
+                        <p class="text-xs content-text text-center mt-2">Characteristics of data exchange between peers.</p>
+                    </div>
+                    <div>
+                        <h3 class="sub-section-title text-center">Peer-to-Tracker Channel</h3>
+                        <div class="chart-container h-80 md:h-96"><canvas id="p2tRadarChart"></canvas></div>
+                        <p class="text-xs content-text text-center mt-2">Characteristics of communication with trackers.</p>
+                    </div>
+                    <div>
+                        <h3 class="sub-section-title text-center">Peer-to-DHT Channel</h3>
+                        <div class="chart-container h-80 md:h-96"><canvas id="dhtRadarChart"></canvas></div>
+                        <p class="text-xs content-text text-center mt-2">Characteristics of interactions within the DHT network.</p>
+                    </div>
+                </div>
+                 <div class="mt-6 content-text text-sm">
+                    <p><strong class="text-[#FF6B6B]">Note on Radar Charts:</strong> Scales are qualitative (1=Low/Poor, 5=High/Excellent). For 'Latency', lower is better (so 1=High Latency, 5=Low Latency). For 'Loss Handling', higher is better. For 'Ordering', higher means more guaranteed. For 'Security', higher implies stronger built-in mechanisms.</p>
+                    <ul class="list-disc list-inside mt-2">
+                        <li><strong>Peer-to-Peer:</strong> Variable latency, good ordering (TCP/uTP), good loss handling (TCP/uTP), moderate security (optional MSE, piece hashes).</li>
+                        <li><strong>Peer-to-Tracker:</strong> HTTP latency can be higher than UDP. Ordering good with TCP. Loss handling by TCP or client retries for UDP. Security depends on HTTPS; UDP often plaintext.</li>
+                        <li><strong>Peer-to-DHT:</strong> Low latency per hop, but lookups are multi-hop. No ordering/loss guarantee by UDP (app layer handles). Security is a challenge (vulnerable to attacks, some mitigations).</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="dissemination" class="py-12 bg-gray-50">
+            <h2 class="section-title">Information Dissemination Strategies</h2>
+            <div class="card">
+                <p class="content-text mb-6">BitTorrent employs "efficient information dissemination strategies" rather than traditional broadcasts. This ensures relevant peers find each other and piece availability information.</p>
+                <h3 class="sub-section-title text-center">How Information Spreads</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <div class="space-y-4">
+                        <div class="text-center"><strong class="text-[#06D6A0]">Goal: Discover Other Peers</strong></div>
+                        <div class="flow-box">Client Needs Peers for Torrent X</div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="flex flex-col items-center">
+                                <div class="flow-box text-xs p-1 w-full">Tracker Announce (Torrent X)</div>
+                                <div class="flow-arrow text-sm">⬇️</div>
+                                <div class="flow-box text-xs p-1 w-full bg-[#E6FFFA]">Peer List A</div>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                <div class="flow-box text-xs p-1 w-full">DHT get_peers (Infohash X)</div>
+                                <div class="flow-arrow text-sm">⬇️</div>
+                                <div class="flow-box text-xs p-1 w-full bg-[#E6FFFA]">Peer List B</div>
+                            </div>
+                            <div class="flex flex-col items-center">
+                                <div class="flow-box text-xs p-1 w-full">PEX with Connected Peer Y</div>
+                                <div class="flow-arrow text-sm">⬇️</div>
+                                <div class="flow-box text-xs p-1 w-full bg-[#E6FFFA]">Peer List C</div>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="flow-box">Client Connects to Peers from Lists A, B, C</div>
+                    </div>
+                    <div class="space-y-4 mt-8 md:mt-0">
+                        <div class="text-center"><strong class="text-[#FF6B6B]">Goal: Share Piece Availability</strong></div>
+                        <div class="flow-box">Peer D Acquires Piece #N</div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="flow-box">Sends "HAVE Piece #N" Message</div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="flow-box bg-[#FFF0F0]">All Directly Connected Peers of D</div>
+                        <div class="flow-arrow">⬇️</div>
+                        <div class="flow-box">Connected Peers Update Availability & May Request Piece #N</div>
+                         <div class="mt-4 flow-box">New Peer E connects to D: Receives D's "BITFIELD" (all current pieces)</div>
+                    </div>
+                </div>
+                 <p class="content-text mt-6">Other mechanisms include Magnet Links (BEP 9) for initial metadata fetching from peers, and Local Peer Discovery (LPD - BEP 14) for finding peers on the same local network.</p>
+            </div>
+        </section>
+
+        <section id="async-sync" class="py-12">
+            <h2 class="section-title">Network Reality: Asynchronous vs. Synchronous</h2>
+            <div class="card">
+                <p class="content-text mb-6">BitTorrent operates in the real-world asynchronous Internet. Understanding this context versus a theoretical synchronous model highlights its design choices.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="border-l-4 border-[#FF6B6B] pl-4">
+                        <h3 class="text-xl font-semibold text-[#FF6B6B] mb-2">Asynchronous Reality (Current BitTorrent)</h3>
+                        <ul class="list-disc list-inside content-text space-y-1 text-sm">
+                            <li>Arbitrary message delays and potential loss.</li>
+                            <li>Peer lists (from trackers, PEX) can become stale quickly.</li>
+                            <li>DHT operations use UDP; loss/ordering not guaranteed by transport. Iterative lookups and routing table maintenance provide resilience.</li>
+                            <li>Relies on eventual consistency, redundant discovery (Tracker, DHT, PEX), periodic updates.</li>
+                            <li>Designed for scalability, resilience to churn, and fault tolerance in unpredictable networks.</li>
+                        </ul>
+                    </div>
+                    <div class="border-l-4 border-[#06D6A0] pl-4">
+                        <h3 class="text-xl font-semibold text-[#06D6A0] mb-2">Theoretical Synchronous Network</h3>
+                        <ul class="list-disc list-inside content-text space-y-1 text-sm">
+                            <li>Bounded message delivery times, synchronized clocks.</li>
+                            <li>Tracker info could be perfectly consistent (e.g., via Replicated State Machines).</li>
+                            <li>Information propagation (PEX, piece availability) in predictable rounds.</li>
+                            <li>Reliable "flooding" for critical updates becomes feasible.</li>
+                            <li>Consensus algorithms could be applied for swarm-wide agreements.</li>
+                            <li>Offers stronger consistency but likely at the cost of complexity, overhead, and adaptability.</li>
+                        </ul>
+                    </div>
+                </div>
+                <p class="content-text mt-6">BitTorrent's asynchronous design is a pragmatic choice, prioritizing availability and partition tolerance over the strong consistency a synchronous model might offer. Techniques like PEX (gossip-like) are well-suited for its operational environment.</p>
+            </div>
+        </section>
+        
+        <section id="conclusion" class="py-16 bg-[#073B4C] text-white">
+            <div class="container mx-auto px-4 text-center">
+                <h2 class="text-3xl md:text-4xl font-bold mb-6 text-[#FFD166]">BitTorrent: Resilient by Design</h2>
+                <p class="text-lg md:text-xl text-gray-300 max-w-3xl mx-auto mb-8">
+                    BitTorrent's hybrid architecture, multifaceted communication channels, and adaptive information dissemination strategies demonstrate a robust and pragmatic approach to large-scale decentralized file sharing. Its ability to thrive in asynchronous networks highlights a design that prioritizes scalability, fault tolerance, and resilience to peer churn.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-800">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold text-[#118AB2] mb-2">Scalability</h3>
+                        <p class="text-sm">Efficiently distributes large files to vast numbers of users by leveraging participants' resources.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold text-[#06D6A0] mb-2">Resilience</h3>
+                        <p class="text-sm">Decentralized mechanisms (DHT, PEX) reduce single points of failure and adapt to dynamic network conditions.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold text-[#FF6B6B] mb-2">Adaptability</h3>
+                        <p class="text-sm">Continuous evolution through BEPs shows its capacity to incorporate new technologies and address emerging challenges.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="text-center py-8 bg-gray-200 text-gray-600 text-sm">
+        <p>Infographic based on "BitTorrent Protocol: Architecture, Channel, and Broadcast Modeling" report.</p>
+        <p>&copy; <span id="currentYear"></span> All rights reserved. For educational purposes.</p>
+    </footer>
+
+    <script>
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+        function wrapLabel(label, maxWidth = 16) {
+            if (typeof label !== 'string' || label.length <= maxWidth) {
+                return label;
+            }
+            const words = label.split(' ');
+            const lines = [];
+            let currentLine = '';
+            for (const word of words) {
+                if ((currentLine + word).length > maxWidth && currentLine.length > 0) {
+                    lines.push(currentLine.trim());
+                    currentLine = '';
+                }
+                currentLine += word + ' ';
+            }
+            lines.push(currentLine.trim());
+            return lines.filter(line => line.length > 0);
+        }
+
+        const tooltipTitleCallback = (tooltipItems) => {
+            const item = tooltipItems[0];
+            if (!item) return '';
+            let label = item.chart.data.labels[item.dataIndex];
+            if (Array.isArray(label)) {
+                return label.join(' ');
+            }
+            return label;
+        };
+
+        const commonRadarOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    angleLines: { display: true, color: 'rgba(7, 59, 76, 0.2)' }, // #073B4C with alpha
+                    grid: { color: 'rgba(7, 59, 76, 0.2)' },
+                    pointLabels: { 
+                        font: { size: 10 },
+                        color: '#073B4C'
+                    },
+                    ticks: {
+                        beginAtZero: true,
+                        min: 0,
+                        max: 5,
+                        stepSize: 1,
+                        backdropColor: 'rgba(255, 255, 255, 0.75)',
+                        color: '#118AB2'
+                    },
+                    suggestedMin: 0,
+                    suggestedMax: 5
+                }
+            },
+            plugins: {
+                legend: { 
+                    position: 'top',
+                    labels: { color: '#073B4C' }
+                },
+                tooltip: {
+                    callbacks: { 
+                        title: tooltipTitleCallback,
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.r !== null) {
+                                label += context.parsed.r;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        };
+
+        // Data for Radar Charts (Illustrative Qualitative Scores 1-5)
+        // Latency: 1=High Latency (bad), 5=Low Latency (good)
+        // Ordering: 1=Not Guaranteed, 5=Guaranteed
+        // Loss Handling: 1=Poor/None, 5=Excellent/Built-in
+        // Security: 1=Low/Vulnerable, 5=High/Robust
+        const radarLabels = ['Latency', 'Ordering', 'Loss Handling', 'Security'];
+
+        const p2pRadarData = {
+            labels: radarLabels.map(l => wrapLabel(l)),
+            datasets: [{
+                label: 'Peer-to-Peer',
+                data: [3, 5, 5, 3], // Latency(Variable=3), Ordering(TCP/uTP=5), Loss(TCP/uTP=5), Security(MSE opt, Hashes=3)
+                backgroundColor: 'rgba(255, 107, 107, 0.2)', // Coral Red
+                borderColor: '#FF6B6B',
+                pointBackgroundColor: '#FF6B6B',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: '#FF6B6B'
+            }]
+        };
+        new Chart(document.getElementById('p2pRadarChart'), { type: 'radar', data: p2pRadarData, options: commonRadarOptions });
+
+        const p2tRadarData = {
+            labels: radarLabels.map(l => wrapLabel(l)),
+            datasets: [{
+                label: 'Peer-to-Tracker',
+                data: [2, 4, 4, 2], // Latency(HTTP High=2), Ordering(TCP=4), Loss(TCP/Client Retry=4), Security(HTTPS opt=2)
+                backgroundColor: 'rgba(255, 209, 102, 0.2)', // Sunny Yellow
+                borderColor: '#FFD166',
+                pointBackgroundColor: '#FFD166',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: '#FFD166'
+            }]
+        };
+        new Chart(document.getElementById('p2tRadarChart'), { type: 'radar', data: p2tRadarData, options: commonRadarOptions });
+
+        const dhtRadarData = {
+            labels: radarLabels.map(l => wrapLabel(l)),
+            datasets: [{
+                label: 'Peer-to-DHT',
+                data: [4, 1, 2, 1], // Latency(Low per hop=4), Ordering(None=1), Loss(App/Iterative=2), Security(Low=1)
+                backgroundColor: 'rgba(6, 214, 160, 0.2)', // Turquoise Green
+                borderColor: '#06D6A0',
+                pointBackgroundColor: '#06D6A0',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: '#06D6A0'
+            }]
+        };
+        new Chart(document.getElementById('dhtRadarChart'), { type: 'radar', data: dhtRadarData, options: commonRadarOptions });
+        
+        // Sticky Nav Active Link highlighting
+        const sections = document.querySelectorAll('section[id]');
+        const navLinks = document.querySelectorAll('.sticky-nav .nav-link');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                 // Adjust offset for sticky nav height if needed. Approx 60px for this nav.
+                if (pageYOffset >= (sectionTop - sectionHeight / 3 - 60)) { 
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href').substring(1) === current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+
+    </script>
+</body>
+</html>
