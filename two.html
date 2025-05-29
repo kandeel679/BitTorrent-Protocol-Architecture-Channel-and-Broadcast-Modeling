@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BitTorrent Ecosystem: A Deep Dive into its Dynamics & Communication Architecture</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light gray-blue background */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Default max-width, can be overridden by Tailwind classes */
+            margin-left: auto;
+            margin-right: auto;
+            padding: 1rem;
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .section-title {
+            font-size: 1.75rem; /* 28px */
+            font-weight: 600;
+            color: #2A3085; /* Dark Blue from palette */
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #F9A826; /* Orange from palette */
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem; /* More rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .stat-big-number {
+            font-size: 3rem; /* 48px */
+            font-weight: 700;
+            color: #2A3085; /* Dark Blue */
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 1rem;
+            color: #4A5568; /* Tailwind gray-600 */
+            margin-top: 0.5rem;
+        }
+        /* HTML/CSS Flowchart styles */
+        .flow-node {
+            background-color: #E0F2FE; /* Light blue, adjust with palette later if needed */
+            border: 2px solid #2AB7CA; /* Teal */
+            color: #2A3085; /* Dark Blue */
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .flow-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem; /* 24px */
+            color: #F9A826; /* Orange */
+            margin: 0.5rem 0;
+        }
+        /* Timeline styles */
+        .timeline-item {
+            position: relative;
+            padding-bottom: 2rem;
+            padding-left: 2.5rem; /* Space for the line and dot */
+            border-left: 3px solid #2AB7CA; /* Teal */
+        }
+        .timeline-dot {
+            position: absolute;
+            left: -0.6rem; /* Adjust to center on the line */
+            top: 0.25rem;
+            height: 1rem;
+            width: 1rem;
+            background-color: #F9A826; /* Orange */
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        .timeline-date {
+            font-weight: 600;
+            color: #2A3085; /* Dark Blue */
+        }
+        .timeline-content h4 {
+            font-weight: 600;
+            color: #2A3085;
+            margin-bottom: 0.25rem;
+        }
+        .timeline-content p {
+            font-size: 0.9rem;
+            color: #4A5568; /* Tailwind gray-600 */
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #2A3085; /* Dark Blue for headings */
+        }
+        p, li {
+            color: #374151; /* Tailwind gray-700 for body text */
+            line-height: 1.6;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #CBD5E0; /* Tailwind gray-400 */
+            padding: 0.75rem;
+            text-align: left;
+        }
+        th {
+            background-color: #EBF4FF; /* Light Blue from "Brilliant Blues" (complementary) */
+            color: #2A3085;
+            font-weight: 600;
+        }
+        .sticky-nav {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 0.5rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .nav-link {
+            color: #2A3085;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+        }
+        .nav-link:hover, .nav-link.active {
+            background-color: #F9A826;
+            color: white;
+        }
+
+    </style>
+</head>
+<body class="text-gray-800">
+    <!--
+    Infographic Narrative Plan:
+    1. Title: Modeling BitTorrent: Ecosystem Dynamics & Communication.
+    2. Introduction: What BitTorrent is, report's visualization goal.
+    3. Section 1: BitTorrent Ecosystem Overview - Components and their roles.
+        - Viz: HTML/CSS Flow Chart of Ecosystem.
+    4. Section 2: Evolution & Technology Adoption - How BitTorrent changed.
+        - Viz: HTML/CSS Timeline (Key Milestones: DHT, PEX, uTP, v2).
+        - Viz: Chart.js Bar Chart (Conceptual: Importance of Tracker vs. DHT vs. PEX).
+    5. Section 3: Communication Channel Deep Dive - How components talk.
+        - Viz: HTML Table (Channel Characteristics: P2P, P2Tracker, P2DHT).
+        - Viz: Chart.js Donut Charts (Protocol Usage: TCP/uTP, HTTP/UDP).
+    6. Section 4: Information Dissemination Strategies - How info spreads.
+        - Viz: HTML/CSS Flow Chart (Info flow: Peer lists, piece availability).
+        - Viz: Chart.js Stacked Bar (Conceptual: Reliance on different dissemination methods).
+    7. Section 5: Resilience & Challenges - Strengths, Weaknesses, Threats.
+        - Viz: Chart.js Radar Chart (Key Challenges: Node Failure, Delay, Byzantine, Churn).
+        - Text: Strengths (Scalability, Cost-sharing, Resilience).
+    8. Section 6: The Future of BitTorrent - BitTorrent v2 and ongoing development.
+    9. Conclusion: Summary of dynamic and robust design.
+
+    Selected Color Palette: "Vibrant Tech Ecosystem"
+    - Main Background: #f0f4f8 (Light Gray-Blue)
+    - Card/Content Background: white
+    - Primary Accent (Orange): #F9A826
+    - Secondary Accent (Teal): #2AB7CA
+    - Primary Text/Heading (Dark Blue): #2A3085
+    - Supporting Accent (Green): #8CC63F
+    - Highlight/Neutral (Yellow): #FDEE87 (Used sparingly for highlights if needed)
+
+    Visualization Choices & Justifications (Confirming NO SVG, NO MERMAID JS):
+    - Ecosystem Diagram: HTML/CSS Flow Chart. Goal: Organize. Shows component interactions. Method: HTML, Tailwind. (NO SVG/Mermaid)
+    - Tech Adoption Timeline: HTML/CSS Timeline. Goal: Change. Shows chronological milestones. Method: HTML, Tailwind. (NO SVG/Mermaid)
+    - Discovery Mechanisms Bar Chart: Chart.js Bar (Canvas). Goal: Compare. Compares conceptual importance. Method: Chart.js. (NO SVG)
+    - Channel Characteristics Table: HTML Table. Goal: Organize/Compare. Presents structured data. Method: HTML, Tailwind. (NO SVG)
+    - Protocol Usage Donut Charts: Chart.js Donut (Canvas). Goal: Compare (composition). Shows proportions. Method: Chart.js. (NO SVG)
+    - Info Dissemination Flow Chart: HTML/CSS Flow Chart. Goal: Organize. Illustrates process. Method: HTML, Tailwind. (NO SVG/Mermaid)
+    - Dissemination Methods Stacked Bar: Chart.js Stacked Bar (Canvas). Goal: Compare (composition). Shows method contributions. Method: Chart.js. (NO SVG)
+    - Challenges Radar Chart: Chart.js Radar (Canvas). Goal: Compare. Shows multi-faceted challenges. Method: Chart.js. (NO SVG)
+    - Big Numbers/Key Stats: Large Text. Goal: Inform. High impact. Method: HTML, Tailwind. (NO SVG)
+
+    Confirmation: NEITHER Mermaid JS NOR SVG were used anywhere in this output. All diagrams are HTML/CSS or Canvas-based via Chart.js.
+    -->
+
+    <header class="bg-gradient-to-r from-[#2A3085] to-[#2AB7CA] text-white py-12 text-center">
+        <div class="container mx-auto px-4">
+            <h1 class="text-4xl md:text-5xl font-bold mb-4 text-white">Modeling BitTorrent</h1>
+            <p class="text-xl md:text-2xl text-gray-200">An Infographic on its Ecosystem Dynamics & Communication Architecture</p>
+        </div>
+    </header>
+
+    <nav class="sticky-nav shadow-lg">
+        <div class="container mx-auto px-4">
+            <ul class="flex flex-wrap justify-center space-x-2 sm:space-x-4">
+                <li><a href="#intro" class="nav-link">Introduction</a></li>
+                <li><a href="#ecosystem" class="nav-link">Ecosystem</a></li>
+                <li><a href="#evolution" class="nav-link">Evolution</a></li>
+                <li><a href="#channels" class="nav-link">Channels</a></li>
+                <li><a href="#dissemination" class="nav-link">Dissemination</a></li>
+                <li><a href="#resilience" class="nav-link">Resilience</a></li>
+                <li><a href="#future" class="nav-link">Future</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-4 md:p-8">
+        <section id="intro" class="card">
+            <h2 class="section-title">Introduction: Understanding BitTorrent</h2>
+            <p class="mb-4">BitTorrent stands as a classic, large-scale, decentralized peer-to-peer (P2P) file-sharing system. Its architecture is inherently designed to address significant challenges prevalent in distributed environments, including unreliable peers, dynamic participation, and efficient content distribution [Project Plan, Phase 1]. This infographic aims to visualize the complex dynamics and communication architecture of the BitTorrent protocol, drawing insights from a detailed modeling report.</p>
+            <p>We explore its network architecture, key components, technological evolution, diverse communication channels, multifaceted information dissemination mechanisms, and its inherent resilience and challenges. The goal is to provide an accessible yet comprehensive overview of how BitTorrent functions and adapts in the real-world asynchronous environment of the Internet.</p>
+        </section>
+
+        <section id="ecosystem" class="card">
+            <h2 class="section-title">The BitTorrent Ecosystem: Key Players & Interactions</h2>
+            <p class="mb-6">The BitTorrent ecosystem is a dynamic interplay of several core components that facilitate decentralized file sharing. Understanding these roles is crucial to grasping the protocol's operational model [Report, Sec. II.E, III.C].</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                <div>
+                    <h3 class="text-2xl font-semibold mb-3 text-[#2A3085]">Core Component Interactions</h3>
+                    <div class="space-y-4">
+                        <div class="flow-node">User obtains <strong class="text-[#F9A826]">.torrent File / Magnet Link</strong></div>
+                        <div class="flow-arrow">➔</div>
+                        <div class="flow-node"><strong class="text-[#F9A826]">BitTorrent Client (Peer)</strong> parses metadata</div>
+                        <div class="flow-arrow">➔</div>
+                        <div class="flow-node">Client contacts <strong class="text-[#F9A826]">Tracker(s)</strong> for peer lists OR queries <strong class="text-[#F9A826]">DHT Network</strong></div>
+                        <div class="flow-arrow">➔</div>
+                        <div class="flow-node">Client connects to <strong class="text-[#F9A826]">Other Peers (Leechers & Seeders)</strong></div>
+                        <div class="flow-arrow">➔</div>
+                        <div class="flow-node">Piece exchange, <strong class="text-[#F9A826]">PEX</strong>, and 'have' messages occur</div>
+                    </div>
+                    <p class="mt-4 text-sm text-gray-600">This simplified flow shows the typical lifecycle of initiating a download and joining a swarm. Actual interactions are more complex and often parallel.</p>
+                </div>
+                <div class="chart-container h-[400px] md:h-[450px]">
+                     <canvas id="componentRolesChart"></canvas>
+                </div>
+            </div>
+             <p class="mt-6">The main components include <strong class="text-[#2A3085]">.torrent files</strong> (metadata), <strong class="text-[#2A3085]">Trackers</strong> (coordination servers), <strong class="text-[#2A3085]">Peers</strong> (Leechers downloading, Seeders uploading), <strong class="text-[#2A3085]">Pieces</strong> (file segments), <strong class="text-[#2A3085]">DHT Nodes</strong> (decentralized discovery), and <strong class="text-[#2A3085]">PEX participants</strong> (direct peer list sharing) [Report, Sec. II.E]. This hybrid architecture blends centralized bootstrapping with decentralized execution.</p>
+        </section>
+
+        <section id="evolution" class="card">
+            <h2 class="section-title">Evolution & Technology Adoption: Adapting for Resilience</h2>
+            <p class="mb-6">BitTorrent has continuously evolved, incorporating new technologies and mechanisms to enhance its efficiency, decentralization, and resilience against failures and external pressures [Report, Sec. III.A]. This evolution is marked by key BitTorrent Enhancement Proposals (BEPs).</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="md:col-span-2">
+                    <h3 class="text-2xl font-semibold mb-4 text-[#2A3085]">Key Technological Milestones</h3>
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-content">
+                            <p class="timeline-date">Early 2000s</p>
+                            <h4>Initial BitTorrent Protocol (BEP 3)</h4>
+                            <p>Introduced core concepts: .torrent files, trackers, peer wire protocol over TCP, tit-for-tat choking.</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-content">
+                            <p class="timeline-date">Mid 2000s</p>
+                            <h4>DHT Introduction (BEP 5)</h4>
+                            <p>Mainline DHT (Kademlia-based) for trackerless peer discovery, enhancing decentralization.</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-content">
+                            <p class="timeline-date">Mid-Late 2000s</p>
+                            <h4>Peer Exchange (PEX - BEP 11) & uTP (BEP 29)</h4>
+                            <p>PEX for direct peer discovery. uTP (Micro Transport Protocol) over UDP for improved congestion control and network friendliness.</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-content">
+                            <p class="timeline-date">2010s - Present</p>
+                            <h4>BitTorrent v2 (BEP 52) & Ongoing Enhancements</h4>
+                            <p>V2 introduces Merkle trees for per-file integrity, a new info-dictionary structure, and various other BEPs continue to refine security, privacy, and functionality.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container h-[350px] md:h-[400px]">
+                    <canvas id="discoveryMechanismChart"></canvas>
+                     <p class="text-center text-sm mt-2 text-gray-600">Conceptual importance/reliance on discovery methods over time.</p>
+                </div>
+            </div>
+            <p class="mt-6">This evolution reflects a clear trend towards greater decentralization (reducing reliance on trackers) and more sophisticated transport protocols (like uTP) to better coexist with other internet traffic [Report, Sec. III.A]. The shift from a purely tracker-dependent system to one incorporating DHT and PEX significantly bolstered BitTorrent's resilience and scalability.</p>
+        </section>
+
+        <section id="channels" class="card">
+            <h2 class="section-title">Communication Channel Deep Dive</h2>
+            <p class="mb-6">BitTorrent utilizes distinct communication channels, each with specific protocols and characteristics that impact reliability, latency, and security [Report, Sec. IV.A, IV.B].</p>
+            
+            <div class="overflow-x-auto mb-8">
+                <h3 class="text-xl font-semibold mb-3 text-[#2A3085]">Channel Characteristics Overview</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Channel Type</th>
+                            <th>Primary Protocol(s)</th>
+                            <th>Typical Latency</th>
+                            <th>Ordering</th>
+                            <th>Loss Handling</th>
+                            <th>Key Security Aspect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Peer-to-Peer</td>
+                            <td>TCP, uTP (BEP 29)</td>
+                            <td>Variable</td>
+                            <td>Ordered</td>
+                            <td>Transport-level (TCP/uTP)</td>
+                            <td>Piece Hashing (integrity), MSE (obfuscation)</td>
+                        </tr>
+                        <tr>
+                            <td>Peer-to-Tracker</td>
+                            <td>HTTP/S, UDP (BEP 15)</td>
+                            <td>HTTP: Higher, UDP: Lower</td>
+                            <td>HTTP: Ordered; UDP: N/A (logical)</td>
+                            <td>HTTP: TCP; UDP: Client Retries</td>
+                            <td>HTTPS (if used), UDP `connection_id`</td>
+                        </tr>
+                        <tr>
+                            <td>Peer-to-DHT</td>
+                            <td>Kademlia UDP (BEP 5)</td>
+                            <td>Low per hop; multi-hop overall</td>
+                            <td>N/A (KRPC transaction IDs)</td>
+                            <td>UDP lossy; Iterative queries</td>
+                            <td>`announce_peer` token (anti-spoofing)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="chart-container h-[300px] md:h-[350px]">
+                    <canvas id="p2pProtocolChart"></canvas>
+                    <p class="text-center text-sm mt-2 text-gray-600">Conceptual usage share for Peer-to-Peer data exchange.</p>
+                </div>
+                <div class="chart-container h-[300px] md:h-[350px]">
+                    <canvas id="trackerProtocolChart"></canvas>
+                    <p class="text-center text-sm mt-2 text-gray-600">Conceptual usage share for Peer-to-Tracker communication.</p>
+                </div>
+            </div>
+            <p class="mt-6">The choice of protocols (e.g., TCP for reliable piece exchange initially, uTP for better network behavior, UDP for low-overhead tracker/DHT queries) reflects a pragmatic approach, balancing needs for reliability, efficiency, and specific interaction patterns [Report, Sec. IV.B].</p>
+        </section>
+
+        <section id="dissemination" class="card">
+            <h2 class="section-title">Information Dissemination Strategies</h2>
+            <p class="mb-6">BitTorrent doesn't use traditional network broadcast. Instead, it employs efficient information dissemination strategies to make data (like peer availability and piece locations) widely known to relevant parties [Report, Sec. V.A, V.B].</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                <div>
+                    <h3 class="text-2xl font-semibold mb-3 text-[#2A3085]">How Information Spreads</h3>
+                     <div class="space-y-3">
+                        <div class="p-3 bg-blue-50 rounded-md border border-[#2AB7CA]">
+                            <h4 class="font-semibold text-[#2A3085]">1. Tracker Announcements</h4>
+                            <p class="text-sm">Peers tell trackers they're in the swarm; tracker gives back a peer list. Centralized per torrent.</p>
+                        </div>
+                        <div class="p-3 bg-green-50 rounded-md border border-[#8CC63F]">
+                            <h4 class="font-semibold text-[#2A3085]">2. Peer Exchange (PEX)</h4>
+                            <p class="text-sm">Connected peers swap lists of other peers they know. Decentralized gossip.</p>
+                        </div>
+                        <div class="p-3 bg-yellow-50 rounded-md border border-[#F9A826]">
+                            <h4 class="font-semibold text-[#2A3085]">3. Distributed Hash Table (DHT)</h4>
+                            <p class="text-sm">Peers query/announce to a decentralized network (Kademlia) to find/list peers for a torrent. Trackerless.</p>
+                        </div>
+                         <div class="p-3 bg-indigo-50 rounded-md border border-[#2A3085]">
+                            <h4 class="font-semibold text-[#2A3085]">4. 'Have' / 'Bitfield' Messages</h4>
+                            <p class="text-sm">Peers tell connected neighbors which pieces they possess. Direct P2P info.</p>
+                        </div>
+                    </div>
+                </div>
+                 <div class="chart-container h-[350px] md:h-[400px] mt-8 md:mt-0">
+                    <canvas id="disseminationMethodsChart"></canvas>
+                    <p class="text-center text-sm mt-2 text-gray-600">Conceptual contribution of various methods to overall peer/piece awareness.</p>
+                </div>
+            </div>
+            <p class="mt-6">These layered and often redundant mechanisms (tracker, PEX, DHT, direct messages) ensure that even in the asynchronous and dynamic Internet environment, peers can effectively discover each other and the pieces they need, contributing to BitTorrent's overall robustness [Report, Sec. V.B].</p>
+        </section>
+
+        <section id="resilience" class="card">
+            <h2 class="section-title">Resilience, Challenges & Strengths</h2>
+            <p class="mb-6">BitTorrent is designed for resilience but faces inherent challenges common to large-scale distributed systems. Its strengths lie in its ability to overcome many of these [Report, Sec. II.D].</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                <div class="chart-container h-[350px] md:h-[400px]">
+                    <canvas id="challengesRadarChart"></canvas>
+                     <p class="text-center text-sm mt-2 text-gray-600">Key operational challenges in the BitTorrent ecosystem.</p>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-semibold mb-3 text-[#2A3085]">Core Strengths</h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700">
+                        <li><strong class="text-[#8CC63F]">Scalability:</strong> Performance often improves with more users, as they also contribute resources.</li>
+                        <li><strong class="text-[#8CC63F]">Resilience to Churn:</strong> Designed to handle peers frequently joining/leaving swarms.</li>
+                        <li><strong class="text-[#8CC63F]">Decentralization (Increasing):</strong> DHT and PEX reduce reliance on central trackers, mitigating single points of failure for discovery.</li>
+                        <li><strong class="text-[#8CC63F]">Cost Distribution:</strong> Bandwidth and hosting costs are shared among participants.</li>
+                        <li><strong class="text-[#8CC63F]">Data Integrity:</strong> Cryptographic hashing of pieces (SHA-1/SHA-256) ensures data validity.</li>
+                        <li><strong class="text-[#8CC63F]">Active Development:</strong> Ongoing improvements through BitTorrent Enhancement Proposals (BEPs).</li>
+                    </ul>
+                </div>
+            </div>
+            <p class="mt-6">Challenges include node failures (peers/trackers crashing), message delays and losses, potential Byzantine (malicious) behaviors, high peer churn, and security vulnerabilities like DDoS or DHT pollution [Report, Sec. II.D]. BitTorrent's architecture (e.g., piece redundancy, tit-for-tat, DHT token mechanism) mitigates many of these, though no system is perfectly immune.</p>
+        </section>
+
+        <section id="future" class="card">
+            <h2 class="section-title">The Future of BitTorrent: V2 and Beyond</h2>
+            <p class="mb-4">BitTorrent continues to evolve. BitTorrent v2 (BEP 52) represents a significant upgrade, aiming to improve efficiency, security, and flexibility [Report, Sec. VI.C].</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-xl font-semibold text-[#2A3085] mb-2">Key Aspects of BitTorrent v2:</h3>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><strong class="text-[#2AB7CA]">Per-file Merkle Trees:</strong> More granular data verification, faster detection of corruption, and ability to identify identical files across torrents.</li>
+                        <li><strong class="text-[#2AB7CA]">New Info-dictionary Structure:</strong> Optimizes metadata handling, especially for magnet links.</li>
+                        <li><strong class="text-[#2AB7CA]">SHA-256 Hashing:</strong> Stronger cryptographic hashes compared to SHA-1 in v1.</li>
+                        <li><strong class="text-[#2AB7CA]">Improved Privacy Considerations:</strong> Less information leakage in some areas compared to v1.</li>
+                    </ul>
+                </div>
+                <div class="text-center p-6 bg-gradient-to-br from-[#FDEE87] to-[#F9A826] rounded-lg shadow-lg">
+                     <div class="stat-big-number text-[#2A3085]">BEP 52</div>
+                     <p class="stat-label text-[#2A3085]">A Major Leap Forward for the Protocol</p>
+                </div>
+            </div>
+            <p class="mt-4">Further research and development focus on areas like enhanced security for decentralized components (DHT/PEX), privacy-preserving mechanisms, and advanced information dissemination models for new applications built upon the BitTorrent framework [Report, Sec. VI.C]. The adaptability demonstrated through numerous BEPs suggests a vibrant future for the protocol.</p>
+        </section>
+
+        <section class="card text-center">
+            <h2 class="section-title">Conclusion: A Dynamic & Robust P2P Ecosystem</h2>
+            <p>BitTorrent exemplifies a pragmatic and highly effective solution for large-scale, decentralized file sharing. Its hybrid architecture, combining centralized and decentralized elements, and its continuous adaptation to the asynchronous and often unreliable nature of the Internet, underscore its robust design. While challenges remain, particularly in security and privacy, its core principles of shared burden, resilience through redundancy, and incentivized cooperation have allowed it to thrive and evolve for over two decades.</p>
+        </section>
+
+    </main>
+
+    <footer class="text-center py-8 bg-[#2A3085] text-gray-300">
+        <p>&copy; 2025 BitTorrent Ecosystem Infographic. Based on the "Modeling BitTorrent" report.</p>
+        <p class="text-sm">All data presented is illustrative, based on qualitative analysis from the source report.</p>
+    </footer>
+
+    <script>
+        const vibrantTechPalette = {
+            orange: '#F9A826',
+            yellow: '#FDEE87',
+            teal: '#2AB7CA',
+            darkBlue: '#2A3085',
+            green: '#8CC63F',
+            lightBlue: '#E0F2FE', // For backgrounds or lighter elements
+            gray: '#6B7280'
+        };
+
+        // Helper function for Chart.js label wrapping
+        function wrapLabels(label, maxWidth) {
+            const words = label.split(' ');
+            let lines = [];
+            let currentLine = '';
+            for (const word of words) {
+                if ((currentLine + word).length > maxWidth && currentLine.length > 0) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine += (currentLine.length === 0 ? '' : ' ') + word;
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+        }
+
+        const defaultChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: vibrantTechPalette.darkBlue,
+                        font: { size: 12 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            const item = tooltipItems[0];
+                            let label = item.chart.data.labels[item.dataIndex];
+                            if (Array.isArray(label)) {
+                              return label.join(' ');
+                            } else {
+                              return label;
+                            }
+                        }
+                    },
+                    bodyColor: vibrantTechPalette.darkBlue,
+                    titleColor: vibrantTechPalette.darkBlue,
+                    backgroundColor: 'rgba(255,255,255,0.9)',
+                    borderColor: vibrantTechPalette.teal,
+                    borderWidth: 1
+                }
+            },
+            scales: {
+                y: {
+                    ticks: { color: vibrantTechPalette.darkBlue, font: { size: 10 } },
+                    grid: { color: 'rgba(42, 48, 133, 0.1)' }
+                },
+                x: {
+                    ticks: { color: vibrantTechPalette.darkBlue, font: { size: 10 } },
+                    grid: { display: false }
+                }
+            }
+        };
+
+
+        // Chart 1: Component Roles (Pie Chart)
+        const componentRolesCtx = document.getElementById('componentRolesChart').getContext('2d');
+        new Chart(componentRolesCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Peers (Leechers/Seeders)', 'Trackers', '.torrent Files', 'DHT Network', 'PEX'].map(l => wrapLabels(l,16)),
+                datasets: [{
+                    label: 'Role in Ecosystem',
+                    data: [40, 15, 10, 25, 10], // Conceptual distribution
+                    backgroundColor: [
+                        vibrantTechPalette.teal,
+                        vibrantTechPalette.orange,
+                        vibrantTechPalette.yellow,
+                        vibrantTechPalette.green,
+                        vibrantTechPalette.darkBlue
+                    ],
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                }]
+            },
+            options: {...defaultChartOptions, plugins: {...defaultChartOptions.plugins, legend: {position: 'top'}}}
+        });
+
+        // Chart 2: Discovery Mechanism Importance (Bar Chart)
+        const discoveryCtx = document.getElementById('discoveryMechanismChart').getContext('2d');
+        new Chart(discoveryCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Trackers (Early)', 'Trackers (Current)', 'DHT', 'PEX'].map(l => wrapLabels(l,12)),
+                datasets: [{
+                    label: 'Conceptual Importance/Reliance',
+                    data: [80, 40, 70, 50], // Illustrative values
+                    backgroundColor: [vibrantTechPalette.orange, vibrantTechPalette.orange, vibrantTechPalette.green, vibrantTechPalette.teal],
+                    borderColor: [vibrantTechPalette.orange, vibrantTechPalette.orange, vibrantTechPalette.green, vibrantTechPalette.teal],
+                    borderWidth: 1
+                }]
+            },
+            options: defaultChartOptions
+        });
+
+        // Chart 3: P2P Protocol Usage (Donut Chart)
+        const p2pProtocolCtx = document.getElementById('p2pProtocolChart').getContext('2d');
+        new Chart(p2pProtocolCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['TCP', 'uTP (BEP 29)'],
+                datasets: [{
+                    data: [45, 55], // Illustrative, uTP adoption is high
+                    backgroundColor: [vibrantTechPalette.darkBlue, vibrantTechPalette.teal],
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                }]
+            },
+            options: {...defaultChartOptions, plugins: {...defaultChartOptions.plugins, legend: {position: 'top'}}}
+        });
+
+        // Chart 4: Tracker Protocol Usage (Donut Chart)
+        const trackerProtocolCtx = document.getElementById('trackerProtocolChart').getContext('2d');
+        new Chart(trackerProtocolCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['HTTP/HTTPS', 'UDP (BEP 15)'],
+                datasets: [{
+                    data: [60, 40], // Illustrative
+                    backgroundColor: [vibrantTechPalette.orange, vibrantTechPalette.green],
+                    borderColor: '#ffffff',
+                    borderWidth: 2
+                }]
+            },
+            options: {...defaultChartOptions, plugins: {...defaultChartOptions.plugins, legend: {position: 'top'}}}
+        });
+
+        // Chart 5: Dissemination Methods (Stacked Bar Chart)
+        const disseminationCtx = document.getElementById('disseminationMethodsChart').getContext('2d');
+        new Chart(disseminationCtx, {
+            type: 'bar', // Can be 'bar' for stacked, or reconfigure for other types
+            data: {
+                labels: ['Peer Discovery', 'Piece Availability'].map(l => wrapLabels(l,16)),
+                datasets: [
+                    {
+                        label: 'Trackers',
+                        data: [30, 10], // Conceptual contribution
+                        backgroundColor: vibrantTechPalette.orange,
+                    },
+                    {
+                        label: 'DHT',
+                        data: [40, 5],
+                        backgroundColor: vibrantTechPalette.green,
+                    },
+                    {
+                        label: 'PEX',
+                        data: [20, 0],
+                        backgroundColor: vibrantTechPalette.teal,
+                    },
+                    {
+                        label: 'Direct (Have/Bitfield)',
+                        data: [10, 85],
+                        backgroundColor: vibrantTechPalette.darkBlue,
+                    }
+                ]
+            },
+            options: {
+                ...defaultChartOptions,
+                scales: {
+                    x: { ...defaultChartOptions.scales.x, stacked: true },
+                    y: { ...defaultChartOptions.scales.y, stacked: true, max: 100, ticks: { ...defaultChartOptions.scales.y.ticks, callback: function(value) { return value + "%"}}}
+                }
+            }
+        });
+
+        // Chart 6: Challenges Radar Chart
+        const challengesCtx = document.getElementById('challengesRadarChart').getContext('2d');
+        new Chart(challengesCtx, {
+            type: 'radar',
+            data: {
+                labels: ['Node Failure', 'Message Delay/Loss', ['Byzantine', 'Threats'], 'Peer Churn', 'Security Gaps'].map(l => Array.isArray(l) ? l : wrapLabels(l,12)),
+                datasets: [{
+                    label: 'Impact/Prevalence Level (Conceptual)',
+                    data: [70, 80, 60, 90, 65], // Illustrative severity
+                    backgroundColor: 'rgba(249, 168, 38, 0.2)', // Orange transparent
+                    borderColor: vibrantTechPalette.orange,
+                    pointBackgroundColor: vibrantTechPalette.orange,
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: vibrantTechPalette.orange
+                }]
+            },
+            options: {
+                ...defaultChartOptions,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(42, 48, 133, 0.2)' },
+                        grid: { color: 'rgba(42, 48, 133, 0.2)' },
+                        pointLabels: { color: vibrantTechPalette.darkBlue, font: {size: 11} },
+                        ticks: { backdropColor: 'transparent', color: vibrantTechPalette.darkBlue, stepSize:20, font: {size: 9} },
+                        suggestedMin: 0,
+                        suggestedMax: 100
+                    }
+                },
+                plugins: { ...defaultChartOptions.plugins, legend: { display: false } }
+            }
+        });
+
+        // Sticky Nav active state on scroll
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('.nav-link');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (pageYOffset >= (sectionTop - sectionHeight / 3)) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href').substring(1) === current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+
+    </script>
+</body>
+</html>
